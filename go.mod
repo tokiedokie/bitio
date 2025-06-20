@@ -1,4 +1,4 @@
-module github.com/icza/bitio
+module github.com/tokiedokie/bitio
 
 go 1.13
 
