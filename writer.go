@@ -17,12 +17,22 @@ type writerAndByteWriter interface {
 	io.ByteWriter
 }
 
-// Writer is the bit writer implementation.
+type Writer interface {
+	Write(p []byte) (n int, err error)
+	WriteBits(r uint64, n uint8) (err error)
+	WriteBitsUnsafe(r uint64, n uint8) (err error)
+	WriteByte(b byte) (err error)
+	WriteBool(b bool) (err error)
+	Align() (skipped uint8, err error)
+	Flush() (err error)
+}
+
+// writer is the bit writer implementation.
 //
 // If you need the number of processed bits, use CountWriter.
 //
 // For convenience, it also implements io.WriterCloser and io.ByteWriter.
-type Writer struct {
+type writer struct {
 	out       writerAndByteWriter
 	wrapperbw *bufio.Writer // wrapper bufio.Writer if the target does not implement io.ByteWriter
 	cache     byte          // unwritten bits are stored here
@@ -37,8 +47,8 @@ type Writer struct {
 // Must be closed in order to flush cached data.
 // If you can't or don't want to close it, flushing data can also be forced
 // by calling Align().
-func NewWriter(out io.Writer) *Writer {
-	w := &Writer{}
+func NewWriter(out io.Writer) *writer {
+	w := &writer{}
 	var ok bool
 	w.out, ok = out.(writerAndByteWriter)
 	if !ok {
@@ -54,7 +64,7 @@ func NewWriter(out io.Writer) *Writer {
 // This will give best performance if the underlying io.Writer is aligned
 // to a byte boundary (else all the individual bytes are spread to multiple bytes).
 // Byte boundary can be ensured by calling Align().
-func (w *Writer) Write(p []byte) (n int, err error) {
+func (w *writer) Write(p []byte) (n int, err error) {
 	// w.bits will be the same after writing 8 bits, so we don't need to update that.
 	if w.bits == 0 {
 		return w.out.Write(p)
@@ -73,11 +83,13 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 // Bits of r in positions higher than n are ignored.
 //
 // For example:
-//   err := w.WriteBits(0x1234, 8)
+//
+//	err := w.WriteBits(0x1234, 8)
 //
 // is equivalent to:
-//   err := w.WriteBits(0x34, 8)
-func (w *Writer) WriteBits(r uint64, n uint8) (err error) {
+//
+//	err := w.WriteBits(0x34, 8)
+func (w *writer) WriteBits(r uint64, n uint8) (err error) {
 	// if r would have bits set at n or higher positions (zero indexed),
 	// WriteBitsUnsafe's implementation could "corrupt" bits in cache.
 	// That is not acceptable. To be on the safe side, mask out higher bits:
@@ -95,13 +107,15 @@ func (w *Writer) WriteBits(r uint64, n uint8) (err error) {
 // not satisfy this is undefined behavior (might corrupt previously written bits).
 //
 // E.g. if you want to write 8 bits:
-//   err := w.WriteBitsUnsafe(0x34, 8)        // This is OK,
-//                                            // 0x34 has no bits set higher than the 8th
-//   err := w.WriteBitsUnsafe(0x1234&0xff, 8) // &0xff masks out bits higher than the 8th
+//
+//	err := w.WriteBitsUnsafe(0x34, 8)        // This is OK,
+//	                                         // 0x34 has no bits set higher than the 8th
+//	err := w.WriteBitsUnsafe(0x1234&0xff, 8) // &0xff masks out bits higher than the 8th
 //
 // Or:
-//   err := w.WriteBits(0x1234, 8)            // bits higher than the 8th are ignored here
-func (w *Writer) WriteBitsUnsafe(r uint64, n uint8) (err error) {
+//
+//	err := w.WriteBits(0x1234, 8)            // bits higher than the 8th are ignored here
+func (w *writer) WriteBitsUnsafe(r uint64, n uint8) (err error) {
 	// Some optimization, frequent cases
 	newbits := w.bits + n
 	if newbits < 8 {
@@ -148,7 +162,7 @@ func (w *Writer) WriteBitsUnsafe(r uint64, n uint8) (err error) {
 // WriteByte writes 8 bits.
 //
 // WriteByte implements io.ByteWriter.
-func (w *Writer) WriteByte(b byte) (err error) {
+func (w *writer) WriteByte(b byte) (err error) {
 	// w.bits will be the same after writing 8 bits, so we don't need to update that.
 	if w.bits == 0 {
 		return w.out.WriteByte(b)
@@ -157,7 +171,7 @@ func (w *Writer) WriteByte(b byte) (err error) {
 }
 
 // writeUnalignedByte writes 8 bits which are (may be) unaligned.
-func (w *Writer) writeUnalignedByte(b byte) (err error) {
+func (w *writer) writeUnalignedByte(b byte) (err error) {
 	// w.bits will be the same after writing 8 bits, so we don't need to update that.
 	bits := w.bits
 	err = w.out.WriteByte(w.cache | b>>bits)
@@ -169,7 +183,7 @@ func (w *Writer) writeUnalignedByte(b byte) (err error) {
 }
 
 // WriteBool writes one bit: 1 if param is true, 0 otherwise.
-func (w *Writer) WriteBool(b bool) (err error) {
+func (w *writer) WriteBool(b bool) (err error) {
 	if w.bits == 7 {
 		if b {
 			err = w.out.WriteByte(w.cache | 1)
@@ -194,7 +208,7 @@ func (w *Writer) WriteBool(b bool) (err error) {
 // so next write will start/go into a new byte.
 // If there are cached bits, they are first written to the output.
 // Returns the number of skipped (unset but still written) bits.
-func (w *Writer) Align() (skipped uint8, err error) {
+func (w *writer) Align() (skipped uint8, err error) {
 	if w.bits > 0 {
 		if err = w.out.WriteByte(w.cache); err != nil {
 			return
@@ -209,73 +223,11 @@ func (w *Writer) Align() (skipped uint8, err error) {
 	return
 }
 
-// TryWrite tries to write len(p) bytes (8 * len(p) bits) to the underlying writer.
-//
-// If there was a previous TryError, it does nothing. Else it calls Write(),
-// returns the data it provides and stores the error in the TryError field.
-func (w *Writer) TryWrite(p []byte) (n int) {
-	if w.TryError == nil {
-		n, w.TryError = w.Write(p)
-	}
-	return
-}
-
-// TryWriteBits tries to write out the n lowest bits of r.
-//
-// If there was a previous TryError, it does nothing. Else it calls WriteBits(),
-// and stores the error in the TryError field.
-func (w *Writer) TryWriteBits(r uint64, n uint8) {
-	if w.TryError == nil {
-		w.TryError = w.WriteBits(r, n)
-	}
-}
-
-// TryWriteBitsUnsafe tries to write out the n lowest bits of r.
-//
-// If there was a previous TryError, it does nothing. Else it calls WriteBitsUnsafe(),
-// and stores the error in the TryError field.
-func (w *Writer) TryWriteBitsUnsafe(r uint64, n uint8) {
-	if w.TryError == nil {
-		w.TryError = w.WriteBitsUnsafe(r, n)
-	}
-}
-
-// TryWriteByte tries to write 8 bits.
-//
-// If there was a previous TryError, it does nothing. Else it calls WriteByte(),
-// and stores the error in the TryError field.
-func (w *Writer) TryWriteByte(b byte) {
-	if w.TryError == nil {
-		w.TryError = w.WriteByte(b)
-	}
-}
-
-// TryWriteBool tries to write one bit: 1 if param is true, 0 otherwise.
-//
-// If there was a previous TryError, it does nothing. Else it calls WriteBool(),
-// and stores the error in the TryError field.
-func (w *Writer) TryWriteBool(b bool) {
-	if w.TryError == nil {
-		w.TryError = w.WriteBool(b)
-	}
-}
-
-// TryAlign tries to align the bit stream to a byte boundary.
-//
-// If there was a previous TryError, it does nothing. Else it calls Align(),
-// returns the data it provides and stores the error in the TryError field.
-func (w *Writer) TryAlign() (skipped uint8) {
-	if w.TryError == nil {
-		skipped, w.TryError = w.Align()
-	}
-	return
-}
-
 // Close closes the bit writer, writes out cached bits.
 // It does not close the underlying io.Writer.
 //
 // Close implements io.Closer.
-func (w *Writer) Close() (err error) {
+func (w *writer) Flush() (err error) {
 	// Make sure cached bits are flushed:
 	if _, err = w.Align(); err != nil {
 		return

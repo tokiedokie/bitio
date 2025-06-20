@@ -110,77 +110,12 @@ func TestCountWriter(t *testing.T) {
 		eq(int64(89), w.BitsCount)
 		eq(nil, w.WriteByte(0xff))
 		eq(int64(97), w.BitsCount)
-		eq(uint8(7), w.TryAlign())
+		actual, _ := w.Align()
+		eq(uint8(7), actual)
 		eq(int64(104), w.BitsCount)
 		w.WriteBitsUnsafe(0x1234, 16)
 		eq(int64(120), w.BitsCount)
-		eq(nil, w.Close())
-
-		eq(true, bytes.Equal(b.Bytes(), expected))
-	}
-}
-
-func TestCountWriterTry(t *testing.T) {
-	for i := 0; i < 2; i++ {
-		// 2 rounds, first use something that implements io.ByteWriter (*bytes.Buffer),
-		// next testWriter which does not.
-		var b interface {
-			io.Writer
-			Bytes() []byte
-		}
-		{
-			buf := &bytes.Buffer{}
-			b = buf
-			if i > 0 {
-				b = &testWriter{b: buf}
-			}
-		}
-
-		w := NewCountWriter(b)
-
-		expected := []byte{0xc1, 0x7f, 0xac, 0x89, 0x24, 0x78, 0x01, 0x02, 0xf8, 0x08, 0xf0, 0xff, 0x80, 0x12, 0x34}
-
-		eq := mighty.Eq(t)
-
-		w.TryWriteByte(0xc1)
-		eq(int64(8), w.BitsCount)
-		w.TryWriteBool(false)
-		w.TryWriteBits(0x3f, 6)
-		eq(int64(15), w.BitsCount)
-		w.TryWriteBool(true)
-		eq(int64(16), w.BitsCount)
-		w.TryWriteByte(0xac)
-		eq(int64(24), w.BitsCount)
-		w.TryWriteBits(0x01, 1)
-		eq(int64(25), w.BitsCount)
-		w.TryWriteBits(0x1248f, 20)
-		eq(int64(45), w.BitsCount)
-		eq(nil, w.TryError)
-
-		eq(uint8(3), w.TryAlign())
-		eq(nil, w.TryError)
-
-		eq(2, w.TryWrite([]byte{0x01, 0x02}))
-		eq(nil, w.TryError)
-
-		w.TryWriteBits(0x0f, 4)
-		eq(nil, w.TryError)
-
-		eq(2, w.TryWrite([]byte{0x80, 0x8f}))
-		eq(nil, w.TryError)
-
-		eq(uint8(4), w.TryAlign())
-		eq(nil, w.TryError)
-		eq(uint8(0), w.TryAlign())
-		eq(nil, w.TryError)
-		w.TryWriteBits(0x01, 1)
-		w.TryWriteByte(0xff)
-		eq(nil, w.TryError)
-
-		eq(uint8(7), w.TryAlign())
-		w.TryWriteBitsUnsafe(0x1234, 16)
-
-		eq(nil, w.Close())
+		eq(nil, w.Flush())
 
 		eq(true, bytes.Equal(b.Bytes(), expected))
 	}
@@ -245,7 +180,7 @@ func TestCountWriterError(t *testing.T) {
 	got, err := w.Write([]byte{0x01, 0x02})
 	eq(1, got)
 	neq(nil, err)
-	neq(nil, w.Close())
+	neq(nil, w.Flush())
 	eq(int64(9), w.BitsCount)
 
 	w = NewCountWriter(&errWriter{0})
@@ -265,46 +200,6 @@ func TestCountWriterError(t *testing.T) {
 	eq(nil, w.WriteBool(true))
 	_, err = w.Align()
 	neq(nil, err)
-	eq(int64(1), w.BitsCount)
-}
-
-func TestCountWriterTryError(t *testing.T) {
-	eq, neq := mighty.EqNeq(t)
-
-	w := NewCountWriter(&errWriter{1})
-	w.TryWriteBool(true)
-	eq(nil, w.TryError)
-	eq(int64(1), w.BitsCount)
-	got := w.TryWrite([]byte{0x01, 0x02})
-	eq(1, got)
-	neq(nil, w.TryError)
-	neq(nil, w.Close())
-	eq(int64(9), w.BitsCount)
-
-	w = NewCountWriter(&errWriter{0})
-	w.TryWriteBits(0x00, 9)
-	neq(nil, w.TryError)
-	eq(int64(0), w.BitsCount)
-
-	w = NewCountWriter(&errWriter{1})
-	w.TryWriteBits(0x00, 17)
-	neq(nil, w.TryError)
-	eq(int64(0), w.BitsCount)
-
-	w = NewCountWriter(&errWriter{})
-	w.TryWriteBits(0x00, 7)
-	eq(nil, w.TryError)
-	eq(int64(7), w.BitsCount)
-	w.TryWriteBool(false)
-	neq(nil, w.TryError)
-	eq(int64(7), w.BitsCount)
-
-	w = NewCountWriter(&errWriter{})
-	w.TryWriteBool(true)
-	eq(nil, w.TryError)
-	eq(int64(1), w.BitsCount)
-	_ = w.TryAlign()
-	neq(nil, w.TryError)
 	eq(int64(1), w.BitsCount)
 }
 
@@ -331,7 +226,7 @@ func TestCountedChain(t *testing.T) {
 
 	skipped, err := w.Align()
 	eq(nil, err)
-	eq(nil, w.Close())
+	eq(nil, w.Flush())
 
 	r := NewCountReader(bytes.NewBuffer(b.Bytes()))
 	expectedReadSize := int64(0)

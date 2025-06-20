@@ -42,7 +42,7 @@ Writing the above values would result in the same sequence of bytes:
 	err = w.WriteBits(0x07, 3)
 	err = w.WriteBits(0x05, 3)
 	err = w.WriteBits(0x15, 6)
-	err = w.Close()
+	err = w.Flush()
 	// b will hold the bytes: 0x8f and 0x55
 
 # Error handling
@@ -87,7 +87,7 @@ And similarly:
 	if w.TryError != nil {
 	    // Handle error
 	}
-	err = w.Close()
+	err = w.Flush()
 	// b will hold the bytes: 0x8f and 0x55
 
 # Number of processed bits

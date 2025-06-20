@@ -48,7 +48,7 @@ err := w.WriteBits(0x08, 4)
 err = w.WriteBits(0x07, 3)
 err = w.WriteBits(0x05, 3)
 err = w.WriteBits(0x15, 6)
-err = w.Close()
+err = w.Flush()
 // b will hold the bytes: 0x8f and 0x55
 ```
 ### Error handling
@@ -93,7 +93,7 @@ w.TryWriteBits(0x15, 6)
 if w.TryError != nil {
     // Handle error
 }
-err = w.Close()
+err = w.Flush()
 // b will hold the bytes: 0x8f and 0x55
 ```
 ### Number of processed bits

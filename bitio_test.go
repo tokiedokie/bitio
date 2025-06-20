@@ -98,70 +98,11 @@ func TestWriter(t *testing.T) {
 		eq(nil, w.WriteBits(0x01, 1))
 		eq(nil, w.WriteByte(0xff))
 
-		eq(uint8(7), w.TryAlign())
+		actual, _ := w.Align()
+		eq(uint8(7), actual)
 		w.WriteBitsUnsafe(0x1234, 16)
 
-		eq(nil, w.Close())
-
-		eq(true, bytes.Equal(b.Bytes(), expected))
-	}
-}
-
-func TestWriterTry(t *testing.T) {
-	for i := 0; i < 2; i++ {
-		// 2 rounds, first use something that implements io.ByteWriter (*bytes.Buffer),
-		// next testWriter which does not.
-		var b interface {
-			io.Writer
-			Bytes() []byte
-		}
-		{
-			buf := &bytes.Buffer{}
-			b = buf
-			if i > 0 {
-				b = &testWriter{b: buf}
-			}
-		}
-
-		w := NewWriter(b)
-
-		expected := []byte{0xc1, 0x7f, 0xac, 0x89, 0x24, 0x78, 0x01, 0x02, 0xf8, 0x08, 0xf0, 0xff, 0x80, 0x12, 0x34}
-
-		eq := mighty.Eq(t)
-
-		w.TryWriteByte(0xc1)
-		w.TryWriteBool(false)
-		w.TryWriteBits(0x3f, 6)
-		w.TryWriteBool(true)
-		w.TryWriteByte(0xac)
-		w.TryWriteBits(0x01, 1)
-		w.TryWriteBits(0x1248f, 20)
-		eq(nil, w.TryError)
-
-		eq(uint8(3), w.TryAlign())
-		eq(nil, w.TryError)
-
-		eq(2, w.TryWrite([]byte{0x01, 0x02}))
-		eq(nil, w.TryError)
-
-		w.TryWriteBits(0x0f, 4)
-		eq(nil, w.TryError)
-
-		eq(2, w.TryWrite([]byte{0x80, 0x8f}))
-		eq(nil, w.TryError)
-
-		eq(uint8(4), w.TryAlign())
-		eq(nil, w.TryError)
-		eq(uint8(0), w.TryAlign())
-		eq(nil, w.TryError)
-		w.TryWriteBits(0x01, 1)
-		w.TryWriteByte(0xff)
-		eq(nil, w.TryError)
-
-		eq(uint8(7), w.TryAlign())
-		w.TryWriteBitsUnsafe(0x1234, 16)
-
-		eq(nil, w.Close())
+		eq(nil, w.Flush())
 
 		eq(true, bytes.Equal(b.Bytes(), expected))
 	}
@@ -249,7 +190,7 @@ func TestWriterError(t *testing.T) {
 	got, err := w.Write([]byte{0x01, 0x02})
 	eq(1, got)
 	neq(nil, err)
-	neq(nil, w.Close())
+	neq(nil, w.Flush())
 
 	w = NewWriter(&errWriter{0})
 	neq(nil, w.WriteBits(0x00, 9))
@@ -265,38 +206,6 @@ func TestWriterError(t *testing.T) {
 	eq(nil, w.WriteBool(true))
 	_, err = w.Align()
 	neq(nil, err)
-}
-
-func TestWriterTryError(t *testing.T) {
-	eq, neq := mighty.EqNeq(t)
-
-	w := NewWriter(&errWriter{1})
-	w.TryWriteBool(true)
-	eq(nil, w.TryError)
-	got := w.TryWrite([]byte{0x01, 0x02})
-	eq(1, got)
-	neq(nil, w.TryError)
-	neq(nil, w.Close())
-
-	w = NewWriter(&errWriter{0})
-	w.TryWriteBits(0x00, 9)
-	neq(nil, w.TryError)
-
-	w = NewWriter(&errWriter{1})
-	w.TryWriteBits(0x00, 17)
-	neq(nil, w.TryError)
-
-	w = NewWriter(&errWriter{})
-	w.TryWriteBits(0x00, 7)
-	eq(nil, w.TryError)
-	w.TryWriteBool(false)
-	neq(nil, w.TryError)
-
-	w = NewWriter(&errWriter{})
-	w.TryWriteBool(true)
-	eq(nil, w.TryError)
-	_ = w.TryAlign()
-	neq(nil, w.TryError)
 }
 
 func TestChain(t *testing.T) {
@@ -318,7 +227,7 @@ func TestChain(t *testing.T) {
 		w.WriteBits(expected[i], bits[i])
 	}
 
-	eq(nil, w.Close())
+	eq(nil, w.Flush())
 
 	r := NewReader(bytes.NewBuffer(b.Bytes()))
 

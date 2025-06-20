@@ -16,7 +16,7 @@ import (
 //
 // For convenience, it also implements io.WriterCloser and io.ByteWriter.
 type CountWriter struct {
-	*Writer
+	Writer
 	BitsCount int64 // Total number of bits written
 }
 
@@ -46,10 +46,12 @@ func (w *CountWriter) Write(p []byte) (n int, err error) {
 // Bits of r in positions higher than n are ignored.
 //
 // For example:
-//   err := w.WriteBits(0x1234, 8)
+//
+//	err := w.WriteBits(0x1234, 8)
 //
 // is equivalent to:
-//   err := w.WriteBits(0x34, 8)
+//
+//	err := w.WriteBits(0x34, 8)
 func (w *CountWriter) WriteBits(r uint64, n uint8) (err error) {
 	// if r would have bits set at n or higher positions (zero indexed),
 	// WriteBitsUnsafe's implementation could "corrupt" bits in cache.
@@ -68,12 +70,14 @@ func (w *CountWriter) WriteBits(r uint64, n uint8) (err error) {
 // not satisfy this is undefined behavior (might corrupt previously written bits).
 //
 // E.g. if you want to write 8 bits:
-//   err := w.WriteBitsUnsafe(0x34, 8)        // This is OK,
-//                                            // 0x34 has no bits set higher than the 8th
-//   err := w.WriteBitsUnsafe(0x1234&0xff, 8) // &0xff masks out bits higher than the 8th
+//
+//	err := w.WriteBitsUnsafe(0x34, 8)        // This is OK,
+//	                                         // 0x34 has no bits set higher than the 8th
+//	err := w.WriteBitsUnsafe(0x1234&0xff, 8) // &0xff masks out bits higher than the 8th
 //
 // Or:
-//   err := w.WriteBits(0x1234, 8)            // bits higher than the 8th are ignored here
+//
+//	err := w.WriteBits(0x1234, 8)            // bits higher than the 8th are ignored here
 func (w *CountWriter) WriteBitsUnsafe(r uint64, n uint8) (err error) {
 	err = w.Writer.WriteBitsUnsafe(r, n)
 	if err == nil {
@@ -112,73 +116,11 @@ func (w *CountWriter) Align() (skipped uint8, err error) {
 	return
 }
 
-// TryWrite tries to write len(p) bytes (8 * len(p) bits) to the underlying writer.
-//
-// If there was a previous TryError, it does nothing. Else it calls Write(),
-// returns the data it provides and stores the error in the TryError field.
-func (w *CountWriter) TryWrite(p []byte) (n int) {
-	if w.TryError == nil {
-		n, w.TryError = w.Write(p)
-	}
-	return
-}
-
-// TryWriteBits tries to write out the n lowest bits of r.
-//
-// If there was a previous TryError, it does nothing. Else it calls WriteBits(),
-// and stores the error in the TryError field.
-func (w *CountWriter) TryWriteBits(r uint64, n uint8) {
-	if w.TryError == nil {
-		w.TryError = w.WriteBits(r, n)
-	}
-}
-
-// TryWriteBitsUnsafe tries to write out the n lowest bits of r.
-//
-// If there was a previous TryError, it does nothing. Else it calls WriteBitsUnsafe(),
-// and stores the error in the TryError field.
-func (w *CountWriter) TryWriteBitsUnsafe(r uint64, n uint8) {
-	if w.TryError == nil {
-		w.TryError = w.WriteBitsUnsafe(r, n)
-	}
-}
-
-// TryWriteByte tries to write 8 bits.
-//
-// If there was a previous TryError, it does nothing. Else it calls WriteByte(),
-// and stores the error in the TryError field.
-func (w *CountWriter) TryWriteByte(b byte) {
-	if w.TryError == nil {
-		w.TryError = w.WriteByte(b)
-	}
-}
-
-// TryWriteBool tries to write one bit: 1 if param is true, 0 otherwise.
-//
-// If there was a previous TryError, it does nothing. Else it calls WriteBool(),
-// and stores the error in the TryError field.
-func (w *CountWriter) TryWriteBool(b bool) {
-	if w.TryError == nil {
-		w.TryError = w.WriteBool(b)
-	}
-}
-
-// TryAlign tries to align the bit stream to a byte boundary.
-//
-// If there was a previous TryError, it does nothing. Else it calls Align(),
-// returns the data it provides and stores the error in the TryError field.
-func (w *CountWriter) TryAlign() (skipped uint8) {
-	if w.TryError == nil {
-		skipped, w.TryError = w.Align()
-	}
-	return
-}
-
 // Close closes the bit writer, writes out cached bits.
 // It does not close the underlying io.Writer.
 //
 // Close implements io.Closer.
-func (w *CountWriter) Close() (err error) {
+func (w *CountWriter) Flush() (err error) {
 	// Make sure cached bits are flushed:
 	if _, err = w.Align(); err != nil {
 		return
