@@ -54,46 +54,52 @@ err = w.Flush()
 ### Error handling
 
 All `ReadXXX()` and `WriteXXX()` methods return an error which you are expected to handle.
-For convenience, there are also matching `TryReadXXX()` and `TryWriteXXX()` methods
-which do not return an error. Instead they store the (first) error in the
-`Reader.TryError` / `Writer.TryError` field which you can inspect later.
-These `TryXXX()` methods are a no-op if a `TryError` has been encountered before,
-so it's safe to call multiple `TryXXX()` methods and defer the error checking.
 
 For example:
 ```golang
 r := NewReader(bytes.NewBuffer([]byte{0x8f, 0x55}))
-a := r.TryReadBits(4) //   1000 = 0x08
-b := r.TryReadBits(3) //    111 = 0x07
-c := r.TryReadBits(3) //    101 = 0x05
-d := r.TryReadBits(6) // 010101 = 0x15
-if r.TryError != nil {
+a, err := r.ReadBits(4) //   1000 = 0x08
+if err != nil {
+    // Handle error
+}
+b, err := r.ReadBits(3) //    111 = 0x07
+if err != nil {
+    // Handle error
+}
+c, err := r.ReadBits(3) //    101 = 0x05
+if err != nil {
+    // Handle error
+}
+d, err := r.ReadBits(6) // 010101 = 0x15
+if err != nil {
     // Handle error
 }
 ```
-This allows you to easily convert the result of individual `ReadBits()`, like this:
-```golang
-r := NewReader(bytes.NewBuffer([]byte{0x8f, 0x55}))
-a := byte(r.TryReadBits(4))   //   1000 = 0x08
-b := int32(r.TryReadBits(3))  //    111 = 0x07
-c := int64(r.TryReadBits(3))  //    101 = 0x05
-d := uint16(r.TryReadBits(6)) // 010101 = 0x15
-if r.TryError != nil {
-    // Handle error
-}
-```
-And similarly:
+
+And similarly for writing:
 ```golang
 b := &bytes.Buffer{}
 w := NewWriter(b)
-w.TryWriteBits(0x08, 4)
-w.TryWriteBits(0x07, 3)
-w.TryWriteBits(0x05, 3)
-w.TryWriteBits(0x15, 6)
-if w.TryError != nil {
+err := w.WriteBits(0x08, 4)
+if err != nil {
+    // Handle error
+}
+err = w.WriteBits(0x07, 3)
+if err != nil {
+    // Handle error
+}
+err = w.WriteBits(0x05, 3)
+if err != nil {
+    // Handle error
+}
+err = w.WriteBits(0x15, 6)
+if err != nil {
     // Handle error
 }
 err = w.Flush()
+if err != nil {
+    // Handle error
+}
 // b will hold the bytes: 0x8f and 0x55
 ```
 ### Number of processed bits
