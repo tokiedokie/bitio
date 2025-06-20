@@ -56,51 +56,6 @@ func TestCountReader(t *testing.T) {
 	eq(true, bytes.Equal(s, []byte{0x80, 0x8f}))
 }
 
-func TestCountReaderTry(t *testing.T) {
-	data := []byte{3, 255, 0xcc, 0x1a, 0xbc, 0xde, 0x80, 0x01, 0x02, 0xf8, 0x08, 0xf0}
-
-	r := NewCountReader(bytes.NewBuffer(data))
-	eq := mighty.Eq(t)
-
-	eq(int64(0), r.BitsCount)
-
-	eq(byte(3), r.TryReadByte())
-	eq(int64(8), r.BitsCount)
-
-	eq(uint64(255), r.TryReadBits(8))
-	eq(int64(16), r.BitsCount)
-
-	eq(uint64(0xc), r.TryReadBits(4))
-	eq(int64(20), r.BitsCount)
-
-	eq(uint64(0xc1), r.TryReadBits(8))
-	eq(int64(28), r.BitsCount)
-
-	eq(uint64(0xabcde), r.TryReadBits(20))
-	eq(int64(48), r.BitsCount)
-
-	eq(true, r.TryReadBool())
-	eq(false, r.TryReadBool())
-	eq(int64(50), r.BitsCount)
-
-	eq(uint8(6), r.Align())
-	eq(int64(56), r.BitsCount)
-
-	s := make([]byte, 2)
-	eq(2, r.TryRead(s))
-	eq(true, bytes.Equal(s, []byte{0x01, 0x02}))
-	eq(int64(72), r.BitsCount)
-
-	eq(uint64(0xf), r.TryReadBits(4))
-	eq(int64(76), r.BitsCount)
-
-	eq(2, r.TryRead(s))
-	eq(true, bytes.Equal(s, []byte{0x80, 0x8f}))
-	eq(int64(92), r.BitsCount)
-
-	eq(nil, r.TryError)
-}
-
 func TestCountWriter(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		// 2 rounds, first use something that implements io.ByteWriter (*bytes.Buffer),
@@ -253,27 +208,6 @@ func TestCountReaderEOF(t *testing.T) {
 	eq(int64(8), r.BitsCount)
 }
 
-func TestCountReaderTryEOF(t *testing.T) {
-	eq := mighty.Eq(t)
-
-	r := NewCountReader(bytes.NewBuffer([]byte{0x01}))
-
-	b := r.TryReadByte()
-	eq(byte(1), b)
-	eq(nil, r.TryError)
-	eq(int64(8), r.BitsCount)
-	_ = r.TryReadByte()
-	eq(io.EOF, r.TryError)
-	_ = r.TryReadBool()
-	eq(io.EOF, r.TryError)
-	_ = r.TryReadBits(1)
-	eq(io.EOF, r.TryError)
-	n := r.TryRead(make([]byte, 2))
-	eq(0, n)
-	eq(io.EOF, r.TryError)
-	eq(int64(8), r.BitsCount)
-}
-
 func TestCountReaderEOF2(t *testing.T) {
 	eq, expEq := mighty.EqExpEq(t)
 
@@ -299,36 +233,6 @@ func TestCountReaderEOF2(t *testing.T) {
 	got, err := r.Read(make([]byte, 2))
 	eq(1, got)
 	eq(io.EOF, err)
-	eq(int64(9), r.BitsCount)
-}
-
-func TestCountReaderTryEOF2(t *testing.T) {
-	eq := mighty.Eq(t)
-
-	r := NewCountReader(bytes.NewBuffer([]byte{0x01}))
-	_ = r.TryReadBits(17)
-	eq(io.EOF, r.TryError)
-	eq(int64(0), r.BitsCount)
-
-	// Byte spreading byte boundary (readUnalignedByte)
-	r = NewCountReader(bytes.NewBuffer([]byte{0xc1, 0x01}))
-	eq(true, r.TryReadBool())
-	eq(nil, r.TryError)
-	eq(int64(1), r.BitsCount)
-	eq(byte(0x82), r.TryReadByte())
-	eq(nil, r.TryError)
-	eq(int64(9), r.BitsCount)
-	// readUnalignedByte resulting in EOF
-	_ = r.TryReadByte()
-	eq(io.EOF, r.TryError)
-	eq(int64(9), r.BitsCount)
-
-	r = NewCountReader(bytes.NewBuffer([]byte{0xc1, 0x01}))
-	eq(true, r.TryReadBool())
-	eq(int64(1), r.BitsCount)
-	got := r.TryRead(make([]byte, 2))
-	eq(1, got)
-	eq(io.EOF, r.TryError)
 	eq(int64(9), r.BitsCount)
 }
 

@@ -16,7 +16,7 @@ import (
 //
 // For convenience, it also implements io.Reader and io.ByteReader.
 type CountReader struct {
-	*Reader
+	Reader
 	BitsCount int64 // Total number of bits read
 }
 
@@ -74,49 +74,5 @@ func (r *CountReader) ReadBool() (b bool, err error) {
 func (r *CountReader) Align() (skipped uint8) {
 	skipped = r.Reader.Align()
 	r.BitsCount += int64(skipped)
-	return
-}
-
-// TryRead tries to read up to len(p) bytes (8 * len(p) bits) from the underlying reader.
-//
-// If there was a previous TryError, it does nothing. Else it calls Read(),
-// returns the data it provides and stores the error in the TryError field.
-func (r *CountReader) TryRead(p []byte) (n int) {
-	if r.TryError == nil {
-		n, r.TryError = r.Read(p)
-	}
-	return
-}
-
-// TryReadBits tries to read n bits.
-//
-// If there was a previous TryError, it does nothing. Else it calls ReadBits(),
-// returns the data it provides and stores the error in the TryError field.
-func (r *CountReader) TryReadBits(n uint8) (u uint64) {
-	if r.TryError == nil {
-		u, r.TryError = r.ReadBits(n)
-	}
-	return
-}
-
-// TryReadByte tries to read the next 8 bits and return them as a byte.
-//
-// If there was a previous TryError, it does nothing. Else it calls ReadByte(),
-// returns the data it provides and stores the error in the TryError field.
-func (r *CountReader) TryReadByte() (b byte) {
-	if r.TryError == nil {
-		b, r.TryError = r.ReadByte()
-	}
-	return
-}
-
-// TryReadBool tries to read the next bit, and return true if it is 1.
-//
-// If there was a previous TryError, it does nothing. Else it calls ReadBool(),
-// returns the data it provides and stores the error in the TryError field.
-func (r *CountReader) TryReadBool() (b bool) {
-	if r.TryError == nil {
-		b, r.TryError = r.ReadBool()
-	}
 	return
 }
