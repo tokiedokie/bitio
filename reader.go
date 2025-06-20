@@ -11,6 +11,18 @@ import (
 	"io"
 )
 
+type ReaderInterface interface {
+	Read(p []byte) (n int, err error)
+	ReadBits(n uint8) (u uint64, err error)
+	ReadByte() (b byte, err error)
+	ReadBool() (b bool, err error)
+	Align() (skipped uint8)
+	TryRead(p []byte) (n int)
+	TryReadBits(n uint8) (u uint64)
+	TryReadByte() (b byte)
+	TryReadBool() (b bool)
+}
+
 // An io.Reader and io.ByteReader at the same time.
 type readerAndByteReader interface {
 	io.Reader
